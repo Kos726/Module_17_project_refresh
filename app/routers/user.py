@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from app.backend.db_depends import get_db
-from app.models import User
+from app.models import User, Task
 from app.schemas import CreateUser, UpdateUser
 from fastapi import APIRouter, Depends, status, HTTPException
 from slugify import slugify
@@ -31,6 +31,23 @@ async def user_by_id(db: Annotated[Session, Depends(get_db)], user_id: int):
             detail="There is no user found"
         )
     return user
+
+
+@router.get("/user_id/tasks")
+async def tasks_by_user_id(db: Annotated[Session, Depends(get_db)], user_id: int):
+    user = db.scalar(select(User).where(User.id == user_id))
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="There is no user found"
+        )
+    tasks = db.scalars(select(Task).where(Task.user_id == user_id)).all()
+    if tasks is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This user has not tasks"
+        )
+    return tasks
 
 
 @router.post("/create")
@@ -75,6 +92,15 @@ async def delete_user(db: Annotated[Session, Depends(get_db)], user_id: int):
             detail="There is no user found"
         )
     db.execute(delete(User).where(User.id == user_id))
+
+    task_delete = db.scalar(select(Task).where(Task.user_id == user_id))
+    if task_delete is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This user has not tasks"
+        )
+    db.execute(delete(Task).where(Task.user_id == user_id))
+
     db.commit()
     return {
             'status_code': status.HTTP_200_OK,
